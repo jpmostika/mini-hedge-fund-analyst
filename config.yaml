@@ -1,0 +1,207 @@
+project:
+  name: Meridian Capital Partners
+  version: "1.0"
+  description: Long/Short Equity Hedge Fund System
+
+database:
+  path: cache/meridian.db
+
+universe:
+  refresh_days: 7
+  sp500_url: "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+  benchmarks:
+    - SPY
+    - QQQ
+    - IWM
+    - DIA
+  sector_etfs:
+    - XLK   # Technology
+    - XLF   # Financials
+    - XLV   # Health Care
+    - XLE   # Energy
+    - XLI   # Industrials
+    - XLC   # Communication Services
+    - XLY   # Consumer Discretionary
+    - XLP   # Consumer Staples
+    - XLB   # Materials
+    - XLRE  # Real Estate
+    - XLU   # Utilities
+  macro:
+    - "^VIX"
+    - TLT
+    - HYG
+
+market_data:
+  lookback_years: 3
+  table: daily_prices
+
+fundamentals:
+  table: fundamentals
+  ratios:
+    - roe
+    - roa
+    - gross_margin
+    - operating_margin
+    - net_margin
+    - revenue_growth_yoy
+    - revenue_growth_qoq
+    - earnings_growth_yoy
+    - earnings_growth_qoq
+    - debt_to_equity
+    - fcf_yield
+    - current_ratio
+    - ar_to_revenue
+    - cfo_to_ni
+    - accruals_ratio
+    - retained_earnings
+    - working_capital
+    - total_liabilities
+    - ebit
+    - rd_expense
+    - shares_outstanding
+    - dividends_paid
+    - buybacks
+    - asset_turnover
+
+sec:
+  edgar_base: "https://efts.sec.gov/LATEST/search-index"
+  edgar_submissions: "https://data.sec.gov/submissions"
+  edgar_search: "https://efts.sec.gov/LATEST/search-index?q=%22{ticker}%22&dateRange=custom&startdt={start}&enddt={end}&forms={forms}"
+  rate_limit: 8  # requests per second
+  insider_lookback_days: 180
+  cluster_window_days: 30
+  cluster_min_insiders: 3
+  tables:
+    insider_transactions: insider_transactions
+    filings_cache: filings_cache
+
+institutional:
+  table: institutional_holdings
+  hedge_funds:
+    - name: Citadel
+      cik: "0001423241"
+    - name: Point72
+      cik: "0001603466"
+    - name: Bridgewater
+      cik: "0001350694"
+    - name: Tiger Global
+      cik: "0001167483"
+    - name: Third Point
+      cik: "0001040273"
+    - name: Berkshire Hathaway
+      cik: "0001067983"
+    - name: Appaloosa
+      cik: "0001656456"
+    - name: Baupost
+      cik: "0001061768"
+    - name: Pershing Square
+      cik: "0001336528"
+  new_position_min_funds: 3
+
+short_interest:
+  table: short_interest
+
+estimates:
+  table: analyst_estimates
+  delta_windows: [30, 60, 90]
+
+earnings_calendar:
+  table: earnings_calendar
+  lookahead_days: 30
+
+transcripts:
+  table: earnings_transcripts
+  fmp_base: "https://financialmodelingprep.com/api/v3/earning_call_transcript"
+
+logging:
+  log_file: output/run.log
+  score_log: output/run_scoring.log
+  level: INFO
+
+scoring:
+  regime_conditional_weights: true
+  vix_ticker: "^VIX"
+  vix_low_threshold: 15
+  vix_high_threshold: 25
+  long_quintile: 0.80    # composite >= 80 → LONG candidate
+  short_quintile: 0.20   # composite <= 20 → SHORT candidate
+  output_file: output/scored_universe_latest.csv
+  market_metrics_table: market_metrics
+
+  composite_weights:
+    momentum: 0.20
+    quality: 0.20
+    value: 0.15
+    revisions: 0.15
+    insider: 0.10
+    growth: 0.10
+    short_interest: 0.05
+    institutional: 0.05
+
+  regime_weights:
+    low_vol:   # VIX < 15 — trend-following environment
+      momentum: 0.28
+      quality: 0.20
+      value: 0.10
+      revisions: 0.15
+      insider: 0.10
+      growth: 0.10
+      short_interest: 0.05
+      institutional: 0.02
+    high_vol:  # VIX > 25 — risk-off, quality/value premium
+      momentum: 0.10
+      quality: 0.28
+      value: 0.22
+      revisions: 0.10
+      insider: 0.10
+      growth: 0.10
+      short_interest: 0.05
+      institutional: 0.05
+
+  crowding:
+    window_days: 60
+    flag_threshold: 0.4
+    baselines:
+      momentum_value: -0.3
+      momentum_quality: 0.1
+
+sector_etf_map:
+  Information Technology: XLK
+  Financials: XLF
+  Health Care: XLV
+  Energy: XLE
+  Industrials: XLI
+  Communication Services: XLC
+  Consumer Discretionary: XLY
+  Consumer Staples: XLP
+  Materials: XLB
+  Real Estate: XLRE
+  Utilities: XLU
+
+analysis:
+  model: claude-sonnet-4-6         # configurable: claude-sonnet-4-6, claude-haiku-4-5
+  max_tokens: 4096
+  cost_ceiling_per_run: 25.00      # abort if run exceeds this USD amount
+  cache_ttl_days: 30               # evict analysis results older than this
+  transcript_max_chars: 120000     # truncate transcripts before sending to Claude
+  risk_max_chars: 80000            # truncate 10-K risk sections
+  top_candidates: 20               # how many longs + shorts to analyze in full run
+  reports_dir: output/reports
+  analysis_log: output/run_analysis.log
+
+  # Blend weights: quant composite (Layer 2) vs Claude fundamental score
+  quant_weight: 0.60
+  claude_weight: 0.40
+
+  # Pricing per million tokens (claude-sonnet-4-6)
+  pricing:
+    claude-sonnet-4-6:
+      input_per_mtok: 3.00
+      output_per_mtok: 15.00
+      cache_write_per_mtok: 3.75
+      cache_read_per_mtok: 0.30
+    claude-haiku-4-5:
+      input_per_mtok: 1.00
+      output_per_mtok: 5.00
+      cache_write_per_mtok: 1.25
+      cache_read_per_mtok: 0.10
