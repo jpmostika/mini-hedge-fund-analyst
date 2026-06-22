@@ -22,10 +22,14 @@ def render(conn, system_state: dict, state_json: str):
     col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("LONG Candidates",  scores.get("long_candidates", "—"))
     col2.metric("SHORT Candidates", scores.get("short_candidates", "—"))
-    col3.metric("Factor Alerts",    len(risk.get("factor_alerts", [])))
+    # factor_alerts is stored as a list of alert dicts in system_state
+    factor_alerts_list = risk.get("factor_alerts") or []
+    if isinstance(factor_alerts_list, dict):
+        factor_alerts_list = factor_alerts_list.get("alerts", [])
+    col3.metric("Factor Alerts",    len(factor_alerts_list))
     col4.metric("Crowding Warnings",
-                len([w for w in (risk.get("factor_alerts") or {}).get("alerts", [])
-                     if w.get("priority") == "HIGH"]))
+                len([w for w in factor_alerts_list
+                     if isinstance(w, dict) and w.get("priority") == "HIGH"]))
     col5.metric("Pending Approvals", system_state.get("pending_trades", 0))
 
     # ── Calendar warnings banner ─────────────────────────────────────── #
@@ -118,8 +122,9 @@ def _render_candidate_cards(candidates: list, signal: str, conn):
         except Exception:
             pass
 
+        score_str = f"{score:.1f}" if isinstance(score, (int, float)) else str(score)
         with st.expander(
-            f"{ticker} — {sector} | Score: {score:.1f if isinstance(score, float) else score}",
+            f"{ticker} — {sector} | Score: {score_str}",
             expanded=False,
         ):
             cols = st.columns([2, 1, 1, 1])
