@@ -205,3 +205,125 @@ analysis:
       output_per_mtok: 5.00
       cache_write_per_mtok: 1.25
       cache_read_per_mtok: 0.10
+
+portfolio:
+  nav: 1_000_000               # paper NAV in USD
+  num_longs: 20
+  num_shorts: 20
+  max_position_pct: 0.05       # 5% max per position
+  min_position_pct: 0.005      # 0.5% min per position
+  target_long_gross: 0.75      # 75% long gross
+  target_short_gross: 0.75     # 75% short gross (absolute)
+  gross_exposure: 1.50         # 150% total
+  net_min: 0.00                # 0% net minimum
+  net_max: 0.10                # +10% net maximum
+  max_beta: 0.15               # |net portfolio beta|
+  max_sector_net_pct: 0.05     # 5% max sector net
+  max_sector_one_side_pct: 0.25  # 25% max single-side sector
+  turnover_budget: 0.30        # 30% max one-way turnover per rebalance
+  mvo_risk_aversion: 1.0       # lambda for MVO
+  mvo_return_scale: 0.15       # score 100 = +15%/yr, score 0 = -15%/yr
+  adv_lookback_days: 20        # for liquidity constraint
+  adv_max_pct: 0.05            # no position > 5% of 20-day ADV
+  beta_lookback_days: 60       # rolling beta window
+  cov_lookback_days: 120       # covariance window for MVO
+  earnings_blackout_days: 5    # halve size if earnings within N days
+  tc_spread_pct: 0.05          # spread cost = 5% of daily H-L range
+  tc_impact_coef: 0.10         # market impact coefficient
+  spy_ticker: SPY
+  default_method: conviction   # conviction or mvo
+  portfolio_log: output/run_portfolio.log
+
+  # Hardcoded 2026 FOMC meeting end dates
+  fomc_dates_2026:
+    - "2026-01-29"
+    - "2026-03-19"
+    - "2026-05-07"
+    - "2026-06-18"
+    - "2026-07-30"
+    - "2026-09-17"
+    - "2026-10-29"
+    - "2026-12-10"
+
+risk:
+  halt_lock_file: cache/HALT.lock
+  risk_state_file: cache/risk_state.json
+  stress_cache_dir: cache/stress_periods
+  risk_log: output/run_risk.log
+  factor_lookback_days: 120
+
+  # Pre-trade limits (absolute veto)
+  max_position_pct: 0.05        # 5% AUM max per position
+  max_sector_one_side_pct: 0.25 # 25% one-side sector
+  max_gross: 1.65               # 165% gross exposure
+  net_min: -0.10                # -10% net
+  net_max: 0.15                 # +15% net
+  max_net_beta: 0.20            # |net portfolio beta|
+  max_pairwise_corr: 0.80       # vs existing positions
+  liquidity_adv_max: 0.05       # trade <= 5% of 20-day ADV
+  earnings_blackout_days: 5     # within 5 days = halve size cap
+
+  # Circuit breakers (fire on actual dollar losses)
+  daily_loss_size_down: 0.015   # 1.5% daily loss → SIZE_DOWN 30%
+  daily_loss_close_all: 0.025   # 2.5% daily loss → CLOSE_ALL_TODAY
+  weekly_loss_size_down: 0.04   # 4% weekly loss → SIZE_DOWN 30%
+  drawdown_kill_switch: 0.08    # 8% drawdown → KILL_SWITCH
+  position_loss_force_close: 0.03  # single position > 3% NAV → force-close
+  size_down_factor: 0.30        # reduce all positions by 30%
+
+  # Tail risk thresholds
+  vix_reduce_20_threshold: 25
+  vix_reduce_50_threshold: 35
+  credit_spread_sigma_threshold: 1.0
+  hy_spread_series: BAMLH0A0HYM2
+
+  # Factor & correlation monitors
+  factor_alert_sigma: 1.5
+  within_book_corr_alert: 0.60
+  mctr_concentration_threshold: 1.5  # flag if MCTR > 1.5x weight%
+
+  # Stress test scenarios
+  stress_periods:
+    financial_crisis:
+      start: "2008-09-15"
+      end: "2009-03-09"
+      label: "2008 Financial Crisis"
+    covid_crash:
+      start: "2020-02-19"
+      end: "2020-04-20"
+      label: "2020 Covid Crash"
+    rate_hikes_2022:
+      start: "2022-01-03"
+      end: "2022-10-13"
+      label: "2022 Rate Hikes"
+
+dashboard:
+  port: 8502
+  refresh_interval_seconds: 300   # 5 min during market hours
+  market_open:  "09:30"
+  market_close: "16:00"
+  commentary_weekday: 4           # 0=Mon … 4=Fri
+  dashboard_log: output/dashboard.log
+  jarvis_context_kb: 19
+  jarvis_turns: 6
+  colors:
+    bg:       "#0b0e17"
+    card_from: "#131827"
+    card_to:   "#1a2035"
+    accent:   "#6366f1"
+    long:     "#10b981"
+    short:    "#f43f5e"
+    text:     "#e2e8f0"
+    muted:    "#64748b"
+    border:   "#1e2d3d"
+
+reporting:
+  attribution_csv: output/daily_attribution.csv
+  tearsheet_dir:   output/tearsheets
+  letter_cache:    output/lp_letters
+  short_term_tax:  0.37
+  long_term_tax:   0.20
+  holding_lt_days: 365
+  fund_name:       "Meridian Capital Partners"
+  fund_domicile:   "Delaware"
+  fund_inception:  "2026-01-01"

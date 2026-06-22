@@ -199,6 +199,47 @@ def init_db():
             expires_at  TEXT NOT NULL,
             UNIQUE(analyzer, ticker, artifact_id)
         );
+
+        CREATE TABLE IF NOT EXISTS portfolio_positions (
+            ticker                  TEXT PRIMARY KEY,
+            book                    TEXT NOT NULL,
+            shares                  REAL NOT NULL,
+            target_weight           REAL,
+            entry_price             REAL,
+            entry_date              TEXT,
+            current_price           REAL,
+            unrealized_pnl          REAL,
+            sector                  TEXT,
+            factor_scores_json      TEXT,
+            last_updated            TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS portfolio_history (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker      TEXT NOT NULL,
+            book        TEXT,
+            action      TEXT NOT NULL,
+            shares      REAL NOT NULL,
+            price       REAL,
+            cost_bps    REAL,
+            timestamp   TEXT NOT NULL,
+            reason      TEXT,
+            run_id      TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS position_approvals (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker          TEXT NOT NULL,
+            book            TEXT,
+            action          TEXT NOT NULL,
+            shares          REAL NOT NULL,
+            estimated_price REAL,
+            cost_bps        REAL,
+            status          TEXT DEFAULT 'pending',
+            created_at      TEXT NOT NULL,
+            decided_at      TEXT,
+            notes           TEXT
+        );
     """)
 
     conn.commit()

@@ -89,7 +89,8 @@ def refresh_prices(tickers: Optional[list[str]] = None) -> dict:
         date_groups.setdefault(start, []).append(ticker)
 
     total_bars = 0
-    today_str = date.today().isoformat()
+    # yfinance end date is exclusive — add 1 day so today's data is included
+    today_str = (date.today() + timedelta(days=1)).isoformat()
 
     for start_date, group_tickers in date_groups.items():
         logger.info(f"Fetching {len(group_tickers)} tickers from {start_date}")
