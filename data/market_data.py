@@ -33,7 +33,7 @@ def _last_stored_date(conn: sqlite3.Connection, ticker: str) -> Optional[date]:
     cur = conn.execute(f"SELECT MAX(date) FROM {TABLE} WHERE ticker = ?", (ticker,))
     row = cur.fetchone()
     if row and row[0]:
-        return date.fromisoformat(row[0])
+        return date.fromisoformat(str(row[0])[:10])
     return None
 
 

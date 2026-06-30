@@ -57,7 +57,7 @@ def _fetch_earnings_date(ticker: str) -> Optional[dict]:
         today = date.today()
         cutoff = today + timedelta(days=LOOKAHEAD_DAYS)
         try:
-            ed_date = date.fromisoformat(earnings_date)
+            ed_date = date.fromisoformat(str(earnings_date)[:10])
             if ed_date < today or ed_date > cutoff:
                 return None
         except ValueError:

@@ -49,7 +49,9 @@ class MomentumFactor(BaseFactor):
         if prices.empty:
             return pd.DataFrame()
 
-        prices["date"] = pd.to_datetime(prices["date"])
+        prices["date"] = pd.to_datetime(
+            prices["date"].astype(str).str[:10], format="%Y-%m-%d"
+        )
         pivot = prices.pivot(index="date", columns="ticker", values="close").sort_index()
 
         all_tickers = list(pivot.columns)

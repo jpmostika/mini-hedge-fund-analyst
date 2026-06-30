@@ -40,7 +40,9 @@ class RevisionsFactor(BaseFactor):
                 ORDER BY ticker, date""",
             conn,
         )
-        snapshots["date"] = pd.to_datetime(snapshots["date"]).dt.date
+        snapshots["date"] = pd.to_datetime(
+            snapshots["date"].astype(str).str[:10], format="%Y-%m-%d"
+        ).dt.date
 
         # Check if we have at least 30 days of data for any ticker
         max_history = (snapshots.groupby("ticker")["date"].agg(lambda x: (x.max() - x.min()).days)

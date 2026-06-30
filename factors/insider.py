@@ -49,7 +49,9 @@ class InsiderFactor(BaseFactor):
                   AND transaction_code IN ('P', 'S')""",
             conn,
         )
-        txns["date"] = pd.to_datetime(txns["date"])
+        txns["date"] = pd.to_datetime(
+            txns["date"].astype(str).str[:10], format="%Y-%m-%d"
+        )
         txns["dollar_flow"] = txns.apply(
             lambda row: (row["shares"] or 0) * (row["price"] or 0)
                         * (1 if row["transaction_code"] == "P" else -1),

@@ -36,7 +36,7 @@ def _needs_refresh(conn: sqlite3.Connection) -> bool:
     row = cur.fetchone()
     if not row or not row[0]:
         return True
-    last = datetime.fromisoformat(row[0])
+    last = datetime.fromisoformat(str(row[0])[:26])  # strip sub-second and tz if present
     return datetime.utcnow() - last > timedelta(days=REFRESH_DAYS)
 
 
