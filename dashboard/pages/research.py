@@ -55,16 +55,32 @@ def render(conn, system_state: dict, state_json: str):
     # ── Factor heatmap: top 30 + bottom 30 ──────────────────────────── #
     st.markdown("### Factor Heatmap — Top 30 Longs & Bottom 30 Shorts")
     try:
-        csv = Path(__file__).parent.parent.parent / "output" / "combined_scores_latest.csv"
-        if csv.exists():
-            df = pd.read_csv(csv)
-            top30    = df[df["combined_signal"]=="LONG"].nlargest(30, "combined_score")
-            bottom30 = df[df["combined_signal"]=="SHORT"].nsmallest(30, "combined_score")
+        # scored_universe_latest.csv has individual factor columns (momentum, value, etc.)
+        # combined_scores_latest.csv only has the blended composite — wrong file for heatmap
+        scored_csv  = Path(__file__).parent.parent.parent / "output" / "scored_universe_latest.csv"
+        combined_csv = Path(__file__).parent.parent.parent / "output" / "combined_scores_latest.csv"
+
+        # Merge so we have both factor scores AND combined signal
+        csv_path = scored_csv if scored_csv.exists() else None
+        if csv_path:
+            df = pd.read_csv(csv_path)
+            # Attach combined_signal from combined_scores if available
+            if combined_csv.exists():
+                comb = pd.read_csv(combined_csv)[["ticker","combined_signal","combined_score"]]
+                df = df.merge(comb, on="ticker", how="left")
+                signal_col = "combined_signal"
+                score_col  = "combined_score"
+            else:
+                signal_col = "signal"
+                score_col  = "composite"
+
+            top30    = df[df[signal_col]=="LONG"].nlargest(30, score_col)
+            bottom30 = df[df[signal_col]=="SHORT"].nsmallest(30, score_col)
             heat_df  = pd.concat([top30, bottom30])
             avail    = [f for f in FACTORS if f in heat_df.columns]
             z        = heat_df[avail].fillna(50).values
             labels   = heat_df["ticker"].tolist()
-            signals  = heat_df["combined_signal"].tolist()
+            signals  = heat_df[signal_col].tolist()
             ticker_colors = [C["long"] if s == "LONG" else C["short"] for s in signals]
 
             fig = go.Figure(go.Heatmap(
@@ -88,6 +104,10 @@ def render(conn, system_state: dict, state_json: str):
                              ticktext=[f'<span style="color:{c}">{t}</span>'
                                        for t, c in zip(labels, ticker_colors)])
             st.plotly_chart(fig, use_container_width=True)
+        if not csv_path:
+            st.info("Run `python run_scoring.py` to generate scored_universe_latest.csv")
+        elif not avail:
+            st.info("No factor columns found — ensure run_scoring.py completed successfully")
     except Exception as e:
         st.info(f"Factor heatmap: {e}")
 
