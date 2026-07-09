@@ -47,6 +47,12 @@ def build_system_state(conn: sqlite3.Connection) -> dict:
                 "top_5_shorts": df[df["combined_signal"] == "SHORT"]
                     .nsmallest(5, "combined_score")[["ticker", "sector", "combined_score"]]
                     .to_dict("records"),
+                "top_10_longs": df[df["combined_signal"] == "LONG"]
+                    .nlargest(10, "combined_score")[["ticker", "sector", "combined_score"]]
+                    .to_dict("records"),
+                "top_10_shorts": df[df["combined_signal"] == "SHORT"]
+                    .nsmallest(10, "combined_score")[["ticker", "sector", "combined_score"]]
+                    .to_dict("records"),
                 "last_updated": df.get("score_date", pd.Series([None])).iloc[0]
                     if "score_date" in df.columns else None,
             }

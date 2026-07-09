@@ -55,70 +55,77 @@ def render(conn, system_state: dict, state_json: str):
     # ── Factor heatmap: top 30 + bottom 30 ──────────────────────────── #
     st.markdown("### Factor Heatmap — Top 30 Longs & Bottom 30 Shorts")
     try:
-        # scored_universe_latest.csv has individual factor columns (momentum, value, etc.)
-        # combined_scores_latest.csv only has the blended composite — wrong file for heatmap
-        scored_csv  = Path(__file__).parent.parent.parent / "output" / "scored_universe_latest.csv"
+        # Read factor scores from DB (always has all 503 tickers regardless of --ticker mode)
+        factor_df = pd.read_sql(
+            """SELECT fs.ticker, fs.momentum, fs.value, fs.quality, fs.growth,
+                      fs.revisions, fs.short_interest, fs.insider, fs.institutional,
+                      fs.composite, fs.signal
+               FROM factor_scores fs
+               INNER JOIN (
+                   SELECT ticker, MAX(date) AS md FROM factor_scores GROUP BY ticker
+               ) lp ON fs.ticker = lp.ticker AND fs.date = lp.md""",
+            conn,
+        )
+
+        # Prefer combined_signal from combined_scores_latest.csv if available
         combined_csv = Path(__file__).parent.parent.parent / "output" / "combined_scores_latest.csv"
+        if combined_csv.exists():
+            comb = pd.read_csv(combined_csv)[["ticker", "combined_signal", "combined_score"]]
+            factor_df = factor_df.merge(comb, on="ticker", how="left")
+            signal_col = "combined_signal"
+            score_col  = "combined_score"
+        else:
+            signal_col = "signal"
+            score_col  = "composite"
 
-        # Merge so we have both factor scores AND combined signal
-        csv_path = scored_csv if scored_csv.exists() else None
-        if csv_path:
-            df = pd.read_csv(csv_path)
-            # Attach combined_signal from combined_scores if available
-            if combined_csv.exists():
-                comb = pd.read_csv(combined_csv)[["ticker","combined_signal","combined_score"]]
-                df = df.merge(comb, on="ticker", how="left")
-                signal_col = "combined_signal"
-                score_col  = "combined_score"
-            else:
-                signal_col = "signal"
-                score_col  = "composite"
-
-            top30    = df[df[signal_col]=="LONG"].nlargest(30, score_col)
-            bottom30 = df[df[signal_col]=="SHORT"].nsmallest(30, score_col)
-            heat_df  = pd.concat([top30, bottom30])
+        if factor_df.empty:
+            st.info("No factor scores in database — run `python run_scoring.py`")
+        else:
+            top30    = factor_df[factor_df[signal_col] == "LONG"].nlargest(30, score_col)
+            bottom30 = factor_df[factor_df[signal_col] == "SHORT"].nsmallest(30, score_col)
+            heat_df  = pd.concat([top30, bottom30]).reset_index(drop=True)
             avail    = [f for f in FACTORS if f in heat_df.columns]
-            z        = heat_df[avail].fillna(50).values
-            labels   = heat_df["ticker"].tolist()
-            signals  = heat_df[signal_col].tolist()
-            ticker_colors = [C["long"] if s == "LONG" else C["short"] for s in signals]
 
-            fig = go.Figure(go.Heatmap(
-                z=z.T,
-                x=labels,
-                y=avail,
-                colorscale=[[0, C["short"]], [0.5, "#1e2d3d"], [1, C["long"]]],
-                zmid=50,
-                showscale=True,
-                colorbar=dict(thickness=12, len=0.6),
-            ))
-            fig.update_layout(
-                paper_bgcolor=C["bg"], plot_bgcolor=C["bg"],
-                font_color=C["text"], height=300,
-                margin=dict(l=80, r=20, t=10, b=80),
-                xaxis=dict(tickfont=dict(size=9, color=C["muted"])),
-                yaxis=dict(tickfont=dict(size=10)),
-            )
-            # Color x-axis labels by signal
-            fig.update_xaxes(tickvals=labels,
-                             ticktext=[f'<span style="color:{c}">{t}</span>'
-                                       for t, c in zip(labels, ticker_colors)])
-            st.plotly_chart(fig, use_container_width=True)
-        if not csv_path:
-            st.info("Run `python run_scoring.py` to generate scored_universe_latest.csv")
-        elif not avail:
-            st.info("No factor columns found — ensure run_scoring.py completed successfully")
+            if heat_df.empty or not avail:
+                st.info("No LONG/SHORT candidates — run `python run_scoring.py` then `python run_analysis.py`")
+            else:
+                z       = heat_df[avail].fillna(50).values
+                labels  = heat_df["ticker"].tolist()
+                signals = heat_df[signal_col].fillna("NEUTRAL").tolist()
+                display_labels = [
+                    f"{'▲' if s == 'LONG' else '▽'}{t}"
+                    for t, s in zip(labels, signals)
+                ]
+
+                fig = go.Figure(go.Heatmap(
+                    z=z.T,
+                    x=display_labels,
+                    y=avail,
+                    colorscale=[[0, C["short"]], [0.5, "#1e2d3d"], [1, C["long"]]],
+                    zmid=50,
+                    showscale=True,
+                    colorbar=dict(thickness=12, len=0.6, tickfont=dict(color=C["text"])),
+                    hovertemplate="<b>%{x}</b><br>%{y}: %{z:.1f}<extra></extra>",
+                ))
+                fig.update_layout(
+                    paper_bgcolor=C["bg"], plot_bgcolor=C["bg"],
+                    font_color=C["text"], height=320,
+                    margin=dict(l=100, r=20, t=10, b=90),
+                    xaxis=dict(tickfont=dict(size=8, color=C["muted"]), tickangle=-45),
+                    yaxis=dict(tickfont=dict(size=11)),
+                )
+                st.plotly_chart(fig, use_container_width=True)
     except Exception as e:
-        st.info(f"Factor heatmap: {e}")
+        st.warning(f"Factor heatmap error: {e}")
 
     # ── Candidate cards ──────────────────────────────────────────────── #
     tab_long, tab_short = st.tabs(["🟢 Top 10 Longs", "🔴 Top 10 Shorts"])
 
     with tab_long:
-        _render_candidate_cards(scores.get("top_5_longs", []), "LONG", conn)
+        _render_candidate_cards(scores.get("top_10_longs", scores.get("top_5_longs", [])), "LONG", conn)
 
     with tab_short:
-        _render_candidate_cards(scores.get("top_5_shorts", []), "SHORT", conn)
+        _render_candidate_cards(scores.get("top_10_shorts", scores.get("top_5_shorts", [])), "SHORT", conn)
 
 
 def _render_candidate_cards(candidates: list, signal: str, conn):
