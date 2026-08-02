@@ -97,9 +97,10 @@ def main():
     summary["equity_tickers"] = len(tickers)
     logger.info(f"Working universe: {len(tickers)} equities")
 
-    # 2. Prices
+    # 2. Prices — pass None when no explicit --tickers so market_data includes benchmarks/ETFs (SPY etc.)
     from data.market_data import refresh_prices
-    price_result = _section("Market Prices", refresh_prices, tickers)
+    price_tickers = tickers if args.tickers else None
+    price_result = _section("Market Prices", refresh_prices, price_tickers)
     summary["bars_added"] = price_result.get("bars_added", 0)
 
     # 3. Fundamentals
