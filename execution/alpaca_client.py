@@ -200,6 +200,25 @@ def poll_until_filled(order_id: str) -> dict:
     return {"status": "timeout", "order_id": order_id}
 
 
+# ── Market clock ─────────────────────────────────────────────────────── #
+
+def get_market_clock() -> dict:
+    """Return market open/closed status and next session times from Alpaca."""
+    try:
+        client = _get_client()
+        clock = client.get_clock()
+        return {
+            "ok":         True,
+            "is_open":    clock.is_open,
+            "next_open":  clock.next_open.isoformat() if clock.next_open else None,
+            "next_close": clock.next_close.isoformat() if clock.next_close else None,
+            "timestamp":  clock.timestamp.isoformat() if clock.timestamp else None,
+        }
+    except Exception as e:
+        logger.warning(f"Could not fetch market clock: {e}")
+        return {"ok": False, "is_open": None, "error": str(e)}
+
+
 # ── Connectivity test ─────────────────────────────────────────────────── #
 
 def test_connection() -> dict:

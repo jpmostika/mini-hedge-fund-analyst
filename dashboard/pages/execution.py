@@ -16,6 +16,28 @@ def render(conn, system_state: dict, state_json: str):
 
     positions = get_positions(conn)
 
+    # ── Market status banner ─────────────────────────────────────────── #
+    try:
+        from execution.alpaca_client import get_market_clock
+        clock = get_market_clock()
+        if clock.get("ok"):
+            if clock["is_open"]:
+                st.success("Market is **OPEN** — orders submitted now will fill immediately.", icon="🟢")
+            else:
+                from datetime import datetime
+                raw = clock.get("next_open", "")
+                try:
+                    dt = datetime.fromisoformat(raw)
+                    next_str = dt.strftime("%A %b %d at %I:%M %p ET").replace(" 0", " ")
+                except Exception:
+                    next_str = raw
+                st.warning(
+                    f"Market is **CLOSED** — orders will queue and fill at next open: **{next_str}**",
+                    icon="🔴",
+                )
+    except Exception:
+        pass
+
     # ── Live Alpaca account bar ──────────────────────────────────────── #
     try:
         from execution.alpaca_client import get_account

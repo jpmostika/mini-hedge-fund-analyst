@@ -100,6 +100,19 @@ def main():
             logger.info("No open positions.")
         return
 
+    # ── Market hours check ────────────────────────────────────────────── #
+    from execution.alpaca_client import get_market_clock
+    clock = get_market_clock()
+    if clock.get("ok"):
+        if clock["is_open"]:
+            logger.info("Market is OPEN — orders will fill immediately.")
+        else:
+            next_open = clock.get("next_open", "unknown")
+            logger.warning(
+                f"Market is CLOSED. Orders will queue and fill at next open: {next_open}\n"
+                "  (TimeInForce.DAY orders remain valid through the next trading session.)"
+            )
+
     # ── Execution mode ────────────────────────────────────────────────── #
     from data.db import get_connection, init_db
     from execution.order_manager import run_execution
