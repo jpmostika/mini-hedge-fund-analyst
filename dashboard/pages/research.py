@@ -137,7 +137,12 @@ def _render_candidate_cards(candidates: list, signal: str, conn):
     for cand in candidates:
         ticker  = cand.get("ticker", "?")
         sector  = cand.get("sector", "")
-        score   = cand.get("combined_score", cand.get("composite", "—"))
+        # Use combined_raw (actual blended score) for display — combined_score is a
+        # sector-relative percentile rank so the top stock in every sector scores 100,
+        # which is technically correct but uninformative for ranking candidates.
+        raw_score   = cand.get("combined_raw")
+        quant_score = cand.get("quant_score")
+        display_score = raw_score if raw_score is not None else cand.get("combined_score", cand.get("composite", "—"))
 
         # Load Claude analysis if cached
         analysis_row = None
@@ -149,11 +154,12 @@ def _render_candidate_cards(candidates: list, signal: str, conn):
         except Exception:
             pass
 
-        score_str = f"{score:.1f}" if isinstance(score, (int, float)) else str(score)
-        with st.expander(
-            f"{ticker} — {sector} | Score: {score_str}",
-            expanded=False,
-        ):
+        score_str = f"{display_score:.1f}" if isinstance(display_score, (int, float)) else str(display_score)
+        quant_str = f"{quant_score:.1f}" if isinstance(quant_score, (int, float)) else ""
+        label = f"{ticker} — {sector} | Signal strength: {score_str}"
+        if quant_str:
+            label += f"  (quant: {quant_str})"
+        with st.expander(label, expanded=False):
             cols = st.columns([2, 1, 1, 1])
             cols[0].markdown(f'<span style="color:{color};font-weight:700;">{signal}</span>', unsafe_allow_html=True)
 

@@ -120,35 +120,54 @@ def render(conn, system_state: dict, state_json: str):
 
     # ── Stress test table ────────────────────────────────────────────── #
     st.markdown("### Stress Tests")
-    stress = system_state.get("risk", {}).get("stress_worst")
     try:
         risk_file = Path(__file__).parent.parent.parent / _CFG["risk"]["risk_state_file"]
-        if risk_file.exists():
+        if not risk_file.exists():
+            st.info("Run: `python run_risk_check.py --stress`")
+        else:
             rs = json.loads(risk_file.read_text())
             stress_list = rs.get("stress_tests", [])
-            if stress_list:
-                sdf = pd.DataFrame(stress_list)[
-                    ["scenario","total_pct","long_pct","short_pct","total_pnl"]
-                ].rename(columns={
-                    "scenario": "Scenario",
-                    "total_pct": "Total %",
-                    "long_pct":  "Long %",
-                    "short_pct": "Short %",
-                    "total_pnl": "Total P&L ($)",
-                })
-                st.dataframe(
-                    sdf.style.applymap(
-                        lambda v: f"color:{C['short']}" if isinstance(v, (int,float)) and v < 0
-                                  else f"color:{C['long']}"  if isinstance(v, (int,float)) and v > 0
-                                  else "",
-                        subset=["Total %","Long %","Short %"]
-                    ),
-                    use_container_width=True, hide_index=True,
-                )
+            if not stress_list:
+                st.info("Run: `python run_risk_check.py --stress`")
             else:
-                st.info("Run: python run_risk_check.py --stress")
-    except Exception:
-        st.info("Stress test results not available")
+                rows = []
+                for s in stress_list:
+                    def _fmt_pct(v):
+                        try:
+                            return f"{v:+.2f}%" if v == v else "N/A"  # nan != nan
+                        except Exception:
+                            return "N/A"
+                    def _fmt_pnl(v):
+                        try:
+                            return f"${v:,.0f}" if v == v else "N/A"
+                        except Exception:
+                            return "N/A"
+                    rows.append({
+                        "Scenario":    s.get("scenario", ""),
+                        "Total %":     _fmt_pct(s.get("total_pct")),
+                        "Long %":      _fmt_pct(s.get("long_pct")),
+                        "Short %":     _fmt_pct(s.get("short_pct")),
+                        "Total P&L":   _fmt_pnl(s.get("total_pnl")),
+                    })
+                sdf = pd.DataFrame(rows)
+
+                def _color(v):
+                    if not isinstance(v, str) or v == "N/A":
+                        return ""
+                    try:
+                        num = float(v.replace("%","").replace("$","").replace(",","").replace("+",""))
+                        if num < 0:
+                            return f"color:{C['short']}"
+                        if num > 0:
+                            return f"color:{C['long']}"
+                    except Exception:
+                        pass
+                    return ""
+
+                styled = sdf.style.map(_color, subset=["Total %","Long %","Short %"])
+                st.dataframe(styled, use_container_width=True, hide_index=True)
+    except Exception as e:
+        st.warning(f"Stress test error: {e}")
 
     # ── Correlation heatmap ──────────────────────────────────────────── #
     st.markdown("### Correlation — Within-Book")

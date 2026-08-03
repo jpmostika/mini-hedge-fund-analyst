@@ -317,6 +317,16 @@ dashboard:
     muted:    "#64748b"
     border:   "#1e2d3d"
 
+execution:
+  broker: alpaca
+  paper_trading: true
+  order_type: market            # market or limit
+  time_in_force: day            # day or gtc
+  fill_poll_interval_s: 2       # seconds between fill status checks
+  fill_timeout_s: 120           # give up polling after this many seconds
+  max_slippage_warn_bps: 50     # log warning if fill deviates > 50bps from estimate
+  execution_log: output/run_execution.log
+
 reporting:
   attribution_csv: output/daily_attribution.csv
   tearsheet_dir:   output/tearsheets

@@ -42,16 +42,16 @@ def build_system_state(conn: sqlite3.Connection) -> dict:
                 "long_candidates": int((df["combined_signal"] == "LONG").sum()),
                 "short_candidates": int((df["combined_signal"] == "SHORT").sum()),
                 "top_5_longs": df[df["combined_signal"] == "LONG"]
-                    .nlargest(5, "combined_score")[["ticker", "sector", "combined_score"]]
+                    .nlargest(5, "combined_score")[["ticker", "sector", "combined_raw", "quant_score", "combined_score"]]
                     .to_dict("records"),
                 "top_5_shorts": df[df["combined_signal"] == "SHORT"]
-                    .nsmallest(5, "combined_score")[["ticker", "sector", "combined_score"]]
+                    .nsmallest(5, "combined_score")[["ticker", "sector", "combined_raw", "quant_score", "combined_score"]]
                     .to_dict("records"),
                 "top_10_longs": df[df["combined_signal"] == "LONG"]
-                    .nlargest(10, "combined_score")[["ticker", "sector", "combined_score"]]
+                    .nlargest(10, "combined_score")[["ticker", "sector", "combined_raw", "quant_score", "combined_score"]]
                     .to_dict("records"),
                 "top_10_shorts": df[df["combined_signal"] == "SHORT"]
-                    .nsmallest(10, "combined_score")[["ticker", "sector", "combined_score"]]
+                    .nsmallest(10, "combined_score")[["ticker", "sector", "combined_raw", "quant_score", "combined_score"]]
                     .to_dict("records"),
                 "last_updated": df.get("score_date", pd.Series([None])).iloc[0]
                     if "score_date" in df.columns else None,

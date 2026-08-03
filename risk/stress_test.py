@@ -50,9 +50,21 @@ def _load_historical_returns(label: str, start: str, end: str, tickers: list[str
         logger.info(f"[stress] Loading cached returns: {cache_file.name}")
         return pd.read_parquet(cache_file)
 
-    logger.info(f"[stress] Downloading returns for '{label}' ({start} → {end})...")
+    logger.info(f"[stress] Downloading returns for '{label}' ({start} -> {end})...")
     try:
-        raw = yf.download(tickers, start=start, end=end, auto_adjust=True, progress=False)
+        # Suppress yfinance's per-ticker error spam — some current S&P 500 tickers
+        # (e.g. CEG spun off 2022, SNDK delisted 2016) didn't exist in historical periods.
+        # We handle missing tickers as 0 contribution in _compute_pnl.
+        import logging as _logging
+        _yf_logger = _logging.getLogger("yfinance")
+        _prev_level = _yf_logger.level
+        _yf_logger.setLevel(_logging.CRITICAL)
+
+        try:
+            raw = yf.download(tickers, start=start, end=end, auto_adjust=True, progress=False)
+        finally:
+            _yf_logger.setLevel(_prev_level)
+
         if raw.empty:
             return pd.DataFrame()
 
@@ -67,8 +79,15 @@ def _load_historical_returns(label: str, start: str, end: str, tickers: list[str
         total_ret = (last / first - 1).rename("total_return").to_frame()
         total_ret.index.name = "ticker"
 
+        # Log which tickers were skipped (no data in this historical period)
+        skipped = [t for t in tickers if t not in total_ret.index or total_ret.loc[t, "total_return"] != total_ret.loc[t, "total_return"]]
+        if skipped:
+            logger.info(f"[stress] {label}: {len(skipped)} tickers had no data in this period "
+                        f"(likely post-{start[:4]} spin-offs or acquisitions) — treated as 0 contribution. "
+                        f"Examples: {skipped[:5]}")
+
         total_ret.to_parquet(cache_file)
-        logger.info(f"[stress] Cached {len(total_ret)} ticker returns → {cache_file.name}")
+        logger.info(f"[stress] Cached {len(total_ret)} ticker returns -> {cache_file.name}")
         return total_ret
 
     except Exception as e:
@@ -89,6 +108,9 @@ def _compute_pnl(
 
     for ticker, w in weights.items():
         ret = ticker_returns.get(ticker, 0.0)
+        # Replace NaN (ticker absent in historical data) with 0 — no contribution
+        if ret != ret:
+            ret = 0.0
         contrib = w * ret * NAV  # signed dollar P&L
         if w > 0:
             long_pnl += contrib
