@@ -151,14 +151,15 @@ def run_execution(
         sector = row[0] if row else ""
 
         try:
-            verdict = check_pre_trade(
-                ticker        = ticker,
-                action        = action,
-                shares        = shares,
+            # check_pre_trade returns (approved: bool, reason: str, approved_shares: float)
+            approved, reason, approved_shares = check_pre_trade(
+                ticker          = ticker,
+                action          = action,
+                shares          = shares,
                 estimated_price = est_price,
-                book          = book,
-                sector        = sector,
-                conn          = conn,
+                book            = book,
+                sector          = sector,
+                conn            = conn,
             )
         except Exception as e:
             logger.error(f"Pre-trade check error for {ticker}: {e}")
@@ -167,13 +168,15 @@ def run_execution(
             results["details"].append({"ticker": ticker, "status": "error", "reason": str(e)})
             continue
 
-        if not verdict["approved"]:
-            reason = verdict.get("reason", "veto")
+        if not approved:
             logger.warning(f"VETOED {ticker}: {reason}")
             _set_status(conn, apv_id, "vetoed", reason)
             results["vetoed"] += 1
             results["details"].append({"ticker": ticker, "status": "vetoed", "reason": reason})
             continue
+
+        # Use the potentially reduced share count (e.g. earnings blackout halves it)
+        shares = approved_shares
 
         # ── Submit order ──────────────────────────────────────────────── #
         _set_status(conn, apv_id, "submitted")
