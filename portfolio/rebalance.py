@@ -109,21 +109,25 @@ def generate_trades(
 
         df = pd.DataFrame(trades).sort_values("priority_score", ascending=False).reset_index(drop=True)
 
-        # Apply turnover budget
-        turnover_budget = _P["turnover_budget"] * NAV
-        cumulative_turnover = 0.0
+        # Apply turnover budget — split 50/50 between long and short books so
+        # neither book crowds out the other when priority scores are comparable.
+        half_budget = _P["turnover_budget"] * NAV / 2
+        book_turnover: dict[str, float] = {"long": 0.0, "short": 0.0}
         kept = []
         for _, row in df.iterrows():
+            book = row["book"]
             trade_value = abs(row["weight_change"]) * NAV
-            if cumulative_turnover + trade_value / 2 > turnover_budget:
+            half_trade  = trade_value / 2
+            if book_turnover[book] + half_trade > half_budget:
                 logger.info(
-                    f"Turnover budget ({_P['turnover_budget']*100:.0f}%) reached at "
-                    f"{row['ticker']} — {len(kept)} trades included"
+                    f"Turnover budget for {book} book "
+                    f"({_P['turnover_budget']*100:.0f}%/2) reached at {row['ticker']}"
                 )
-                break
+                continue  # skip this trade but keep processing the other book
             kept.append(row)
-            cumulative_turnover += trade_value / 2
+            book_turnover[book] += half_trade
 
+        total_turnover = sum(book_turnover.values())
         df = pd.DataFrame(kept).reset_index(drop=True)
 
         # Estimate transaction costs
@@ -133,7 +137,8 @@ def generate_trades(
 
         logger.info(
             f"Rebalance: {len(df)} trades | "
-            f"turnover={cumulative_turnover/NAV*100:.1f}% | "
+            f"long_turnover={book_turnover['long']/NAV*100:.1f}% "
+            f"short_turnover={book_turnover['short']/NAV*100:.1f}% | "
             f"avg_cost={df['cost_bps'].mean():.1f} bps"
         )
 
