@@ -24,7 +24,6 @@ def render(conn, system_state: dict, state_json: str):
             if clock["is_open"]:
                 st.success("Market is **OPEN** — orders submitted now will fill immediately.", icon="🟢")
             else:
-                from datetime import datetime
                 raw = clock.get("next_open", "")
                 try:
                     dt = datetime.fromisoformat(raw)
