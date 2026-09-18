@@ -97,14 +97,29 @@ def render(conn, system_state: dict, state_json: str):
             st.markdown("**Awaiting approval:**")
             for _, row in pending.iterrows():
                 col_info, col_apv, col_rej = st.columns([4, 1, 1])
-                signal = "BUY" if (row["book"] == "long" and row["action"] == "open") or \
-                                   (row["book"] == "short" and row["action"] == "close") else "SELL"
-                color  = C["long"] if signal == "BUY" else C["short"]
+                action_str = str(row["action"])
+                book       = str(row["book"])
+                is_open    = "open" in action_str
+                # Derive human-readable direction label
+                if book == "long" and is_open:
+                    signal, color = "BUY",   C["long"]
+                elif book == "short" and is_open:
+                    signal, color = "SHORT",  C["short"]
+                elif book == "long" and not is_open:
+                    signal, color = "SELL",   C["short"]
+                else:  # short + close = cover
+                    signal, color = "COVER",  C["long"]
+
+                # Estimated dollar cost
+                trade_val  = float(row["shares"]) * float(row["estimated_price"])
+                cost_bps   = float(row["cost_bps"])
+                cost_usd   = trade_val * cost_bps / 10_000
+
                 col_info.markdown(
                     f'<span style="color:{color};font-weight:700;">{signal}</span> '
-                    f'**{row["ticker"]}** — {row["book"]} {row["action"]} '
+                    f'**{row["ticker"]}** — {book} {action_str} '
                     f'{int(row["shares"])} shares @ ~${row["estimated_price"]:.2f} '
-                    f'| est. cost {row["cost_bps"]:.1f} bps',
+                    f'| est. cost {cost_bps:.1f} bps (~${cost_usd:,.0f})',
                     unsafe_allow_html=True,
                 )
                 if col_apv.button("Approve", key=f"apv_{row['id']}"):
