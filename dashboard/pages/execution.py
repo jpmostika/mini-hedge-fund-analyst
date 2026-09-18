@@ -212,21 +212,47 @@ def render(conn, system_state: dict, state_json: str):
 
     # ── Current positions from Alpaca (ground truth) ─────────────────── #
     st.markdown("### Positions (Alpaca)")
+    st.caption("Click Close to queue a closing order — it will appear in Pending Approvals above.")
     try:
         from execution.alpaca_client import get_open_positions
         alpaca_positions = get_open_positions()
         if alpaca_positions:
-            alpaca_df = pd.DataFrame(alpaca_positions)
-            alpaca_df["unrealized_pnl"] = alpaca_df["unrealized_pnl"].map(lambda x: f"${x:+,.2f}")
-            alpaca_df["avg_entry"]      = alpaca_df["avg_entry"].map(lambda x: f"${x:.2f}")
-            alpaca_df["current_price"]  = alpaca_df["current_price"].map(lambda x: f"${x:.2f}")
-            st.dataframe(
-                alpaca_df[["ticker","side","qty","avg_entry","current_price","unrealized_pnl"]].rename(columns={
-                    "ticker":"Ticker","side":"Side","qty":"Qty",
-                    "avg_entry":"Avg Entry","current_price":"Price","unrealized_pnl":"Unrealized P&L",
-                }),
-                use_container_width=True, hide_index=True,
-            )
+            # Header
+            h1,h2,h3,h4,h5,h6,h7 = st.columns([1.2, 1, 1, 1.2, 1.2, 1.5, 0.8])
+            for h, lbl in zip([h1,h2,h3,h4,h5,h6,h7],
+                               ["Ticker","Side","Qty","Avg Entry","Price","Unrealized P&L",""]):
+                h.caption(lbl)
+            st.divider()
+
+            from portfolio.state import queue_approval
+            for pos in alpaca_positions:
+                c1,c2,c3,c4,c5,c6,c7 = st.columns([1.2, 1, 1, 1.2, 1.2, 1.5, 0.8])
+                pnl   = pos["unrealized_pnl"]
+                color = C["long"] if pnl >= 0 else C["short"]
+                c1.markdown(f"**{pos['ticker']}**")
+                c2.markdown(pos["side"])
+                c3.markdown(f"{int(pos['qty']):,}")
+                c4.markdown(f"${pos['avg_entry']:.2f}")
+                c5.markdown(f"${pos['current_price']:.2f}")
+                c6.markdown(
+                    f'<span style="color:{color}">${pnl:+,.2f}</span>',
+                    unsafe_allow_html=True,
+                )
+                if c7.button("Close", key=f"close_{pos['ticker']}"):
+                    book   = "long" if pos["side"] == "long" else "short"
+                    action = f"close_{book}"
+                    queue_approval(
+                        ticker          = pos["ticker"],
+                        book            = book,
+                        action          = action,
+                        shares          = abs(pos["qty"]),
+                        estimated_price = pos["current_price"],
+                        cost_bps        = 15.0,
+                        notes           = "manual_close",
+                        conn            = conn,
+                    )
+                    st.success(f"Close order queued for {pos['ticker']} — scroll up to approve and execute.")
+                    st.rerun()
         else:
             st.info("No open positions in Alpaca account.")
     except Exception as e:
