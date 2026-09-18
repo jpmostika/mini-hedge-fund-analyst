@@ -95,41 +95,47 @@ def render(conn, system_state: dict, state_json: str):
         # ── Pending (not yet approved) ─────────────────────────────── #
         if not pending.empty:
             st.markdown("**Awaiting approval:**")
+            # Header row
+            h1, h2, h3, h4, h5, h6, h7 = st.columns([1, 1.2, 1.2, 1, 1.2, 1, 1])
+            for h, label in zip(
+                [h1, h2, h3, h4, h5, h6, h7],
+                ["Direction", "Ticker", "Book", "Shares", "Notional", "", ""],
+            ):
+                h.caption(label)
+            st.divider()
+
             for _, row in pending.iterrows():
-                col_info, col_apv, col_rej = st.columns([4, 1, 1])
                 action_str = str(row["action"])
                 book       = str(row["book"])
                 is_open    = "open" in action_str
-                # Derive human-readable direction label
+
                 if book == "long" and is_open:
                     signal, color = "BUY",   C["long"]
                 elif book == "short" and is_open:
                     signal, color = "SHORT",  C["short"]
                 elif book == "long" and not is_open:
                     signal, color = "SELL",   C["short"]
-                else:  # short + close = cover
+                else:
                     signal, color = "COVER",  C["long"]
 
-                # Estimated dollar cost
-                trade_val  = float(row["shares"]) * float(row["estimated_price"])
-                cost_bps   = float(row["cost_bps"])
-                cost_usd   = trade_val * cost_bps / 10_000
+                shares   = float(row["shares"])
+                price    = float(row["estimated_price"])
+                notional = shares * price
 
-                col_info.markdown(
-                    f'<span style="color:{color};font-weight:700;">{signal}</span> '
-                    f'**{row["ticker"]}** — {book} {action_str} '
-                    f'{int(row["shares"])} shares @ ~${row["estimated_price"]:.2f} '
-                    f'| est. cost {cost_bps:.1f} bps (~${cost_usd:,.0f})',
-                    unsafe_allow_html=True,
-                )
-                if col_apv.button("Approve", key=f"apv_{row['id']}"):
+                c1, c2, c3, c4, c5, c6, c7 = st.columns([1, 1.2, 1.2, 1, 1.2, 1, 1])
+                c1.markdown(f'<span style="color:{color};font-weight:700;">{signal}</span>', unsafe_allow_html=True)
+                c2.markdown(f"**{row['ticker']}**")
+                c3.markdown(f"{book}")
+                c4.markdown(f"{int(shares):,}")
+                c5.markdown(f"${notional:,.0f}")
+                if c6.button("Approve", key=f"apv_{row['id']}"):
                     conn.execute(
                         "UPDATE position_approvals SET status='approved', decided_at=? WHERE id=?",
                         (datetime.now(timezone.utc).isoformat(), int(row["id"])),
                     )
                     conn.commit()
                     st.rerun()
-                if col_rej.button("Reject", key=f"rej_{row['id']}"):
+                if c7.button("Reject", key=f"rej_{row['id']}"):
                     conn.execute(
                         "UPDATE position_approvals SET status='rejected', decided_at=? WHERE id=?",
                         (datetime.now(timezone.utc).isoformat(), int(row["id"])),
@@ -140,11 +146,13 @@ def render(conn, system_state: dict, state_json: str):
         # ── Approved (ready to execute) ────────────────────────────── #
         if not approved_df.empty:
             st.markdown(f"**Ready to execute ({len(approved_df)} trades approved):**")
-            disp_cols = ["ticker","book","action","shares","estimated_price","cost_bps"]
+            disp = approved_df[["ticker","book","action","shares","estimated_price"]].copy()
+            disp["notional"] = (disp["shares"] * disp["estimated_price"]).map("${:,.0f}".format)
+            disp["estimated_price"] = disp["estimated_price"].map("${:.2f}".format)
             st.dataframe(
-                approved_df[[c for c in disp_cols if c in approved_df.columns]].rename(columns={
+                disp.rename(columns={
                     "ticker":"Ticker","book":"Book","action":"Action",
-                    "shares":"Shares","estimated_price":"Est. Price","cost_bps":"Cost (bps)"
+                    "shares":"Shares","estimated_price":"Price","notional":"Notional",
                 }),
                 use_container_width=True, hide_index=True,
             )
